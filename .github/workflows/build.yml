@@ -1,0 +1,53 @@
+name: Build PyBrowser (.deb and .dmg)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y python3-pyqt5 pyqt5-dev-tools pyinstaller ruby ruby-dev build-essential
+          sudo gem install --no-document fpm
+      - name: Build app
+        run: |
+          pyinstaller --onefile --icon=pybrowser.ico PyBrowser1.py
+          mkdir -p build
+          fpm -s dir -t deb -n pybrowser -v 1.0.0 PyBrowser1/dist/PyBrowser1=/usr/local/bin/pybrowser --package build/pybrowser_1.0.0.deb
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: build/pybrowser_1.0.0.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          pip3 install pyqt5 py2app
+      - name: Setup script
+        run: |
+          echo "
+from setuptools import setup
+APP = ['PyBrowser1.py']
+OPTIONS = {'argv_emulation': True, 'iconfile': 'pybrowser.icns', 'packages': ['PyQt5']}
+setup(app=APP, options={'py2app': OPTIONS}, setup_requires=['py2app'])" > setup.py
+      - name: Convert icon
+        run: sips -s format icns pybrowser.ico --out pybrowser.icns
+      - name: Build app
+        run: python3 setup.py py2app
+      - name: Create DMG
+        run: hdiutil create -volname PyBrowser -srcfolder dist/PyBrowser.app -ov -format UDZO PyBrowser.dmg
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: PyBrowser.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
